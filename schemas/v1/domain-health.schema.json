@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://specs.worldseocouncil.com/v1/domain-health.schema.json",
+  "title": "WSC Domain & Tech Health Sentinel Report",
+  "type": "object",
+  "required": [
+    "project_id",
+    "domain",
+    "last_scan_at",
+    "summary",
+    "mail_security",
+    "web_security",
+    "security_headers",
+    "dns_security"
+  ],
+  "properties": {
+    "project_id": { "type": "string" },
+    "domain": { "type": "string" },
+    "last_scan_at": { "type": "integer" },
+    "last_change_at": { "type": "integer" },
+    "days_since_change": { "type": "integer" },
+    "drift_status": { "type": "string", "enum": ["NO_CHANGE", "CHANGED", "NEW_RECORD", "DB_ERROR"] },
+    "summary": {
+      "type": "object",
+      "required": ["overall_health", "ssl_status", "ssl_days_left", "mail_health", "web_health", "dns_health", "headers_score"],
+      "properties": {
+        "overall_health": { "type": "string", "enum": ["GOOD", "OK", "LOW", "PROBLEM", "ERROR", "UNCONFIGURED"] },
+        "ssl_status": { "type": "string", "enum": ["OK", "EXPIRES_SOON", "ERROR"] },
+        "ssl_days_left": { "type": "integer" },
+        "mail_health": { "type": "string", "enum": ["GOOD", "OK", "LOW", "PROBLEM", "ERROR", "UNCONFIGURED"] },
+        "web_health": { "type": "string", "enum": ["GOOD", "OK", "LOW", "PROBLEM", "ERROR", "UNCONFIGURED"] },
+        "dns_health": { "type": "string", "enum": ["GOOD", "OK", "LOW", "PROBLEM", "ERROR", "UNCONFIGURED"] },
+        "headers_score": { "type": "string" }
+      }
+    },
+    "mail_security": {
+      "type": "object",
+      "required": ["provider", "mx_status", "spf_status", "dkim_status", "dmarc_status", "dmarc_policy"],
+      "properties": {
+        "provider": { "type": "string" },
+        "mx_status": { "type": "string", "enum": ["OK", "LOW", "PROBLEM", "N/A"] },
+        "spf_status": { "type": "string", "enum": ["OK", "ERROR", "N/A"] },
+        "dkim_status": { "type": "string", "enum": ["OK", "PROBLEM", "N/A"] },
+        "dmarc_status": { "type": "string", "enum": ["GOOD", "OK", "PROBLEM", "N/A"] },
+        "dmarc_policy": { "type": "string", "enum": ["reject", "quarantine", "none", "missing"] }
+      }
+    },
+    "web_security": {
+      "type": "object",
+      "required": ["http_to_https", "www_canonicalization", "canonical_url", "hsts_enabled", "ipv6_accessible"],
+      "properties": {
+        "http_to_https": { "type": "string", "enum": ["OK", "PROBLEM", "N/A"] },
+        "www_canonicalization": { "type": "string", "enum": ["OK", "PROBLEM", "N/A"] },
+        "canonical_url": { "type": "string" },
+        "hsts_enabled": { "type": "string", "enum": ["GOOD", "PROBLEM", "N/A"] },
+        "ipv6_accessible": { "type": "string", "enum": ["Yes", "No"] }
+      }
+    },
+    "security_headers": {
+      "type": "object",
+      "required": ["score", "total", "hsts", "csp", "x_frame_options", "x_content_type_options", "referrer_policy", "permissions_policy"],
+      "properties": {
+        "score": { "type": "integer", "minimum": 0, "maximum": 6 },
+        "total": { "type": "integer", "enum": [6] },
+        "hsts": { "type": "boolean" },
+        "csp": { "type": "boolean" },
+        "x_frame_options": { "type": "boolean" },
+        "x_content_type_options": { "type": "boolean" },
+        "referrer_policy": { "type": "boolean" },
+        "permissions_policy": { "type": "boolean" }
+      }
+    },
+    "dns_security": {
+      "type": "object",
+      "required": ["dnssec_status", "nameserver_count"],
+      "properties": {
+        "dnssec_status": { "type": "string", "enum": ["GOOD", "PROBLEM", "NOT_CONFIGURED"] },
+        "nameserver_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "identified_services": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

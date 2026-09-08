@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://specs.worldseocouncil.com/v1/dashboard-3cards.schema.json",
+  "title": "WSC Canonical 3-Card Dashboard Report",
+  "type": "object",
+  "required": ["version", "updated_at", "card1", "card2", "card3"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "updated_at": {
+      "type": "integer"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "shop_id": {
+      "type": "string"
+    },
+    "card1": {
+      "type": "object",
+      "required": ["data_7d", "data_30d"],
+      "properties": {
+        "data_7d": { "$ref": "#/$defs/Card1Data" },
+        "data_30d": { "$ref": "#/$defs/Card1Data" }
+      }
+    },
+    "card2": {
+      "type": "object",
+      "required": ["data_7d", "data_30d"],
+      "properties": {
+        "data_7d": { "$ref": "#/$defs/Card2Data" },
+        "data_30d": { "$ref": "#/$defs/Card2Data" }
+      }
+    },
+    "card3": {
+      "type": "object",
+      "required": ["data_7d", "data_30d"],
+      "properties": {
+        "data_7d": { "$ref": "#/$defs/Card3Data" },
+        "data_30d": { "$ref": "#/$defs/Card3Data" }
+      }
+    }
+  },
+  "$defs": {
+    "Card1Data": {
+      "type": "object",
+      "required": ["visitors", "pageviews", "avg_engaged_time", "orders", "revenue", "currency", "channels"],
+      "properties": {
+        "visitors": { "type": "integer", "minimum": 0 },
+        "pageviews": { "type": "integer", "minimum": 0 },
+        "avg_engaged_time": { "type": "string" },
+        "orders": { "type": "integer", "minimum": 0 },
+        "revenue": { "type": "number", "minimum": 0.0 },
+        "currency": { "type": "string", "minLength": 3, "maxLength": 3 },
+        "channels": {
+          "type": "object",
+          "required": ["ai_pct", "search_pct", "social_pct", "direct_pct", "referral_pct"],
+          "properties": {
+            "ai_pct": { "type": "number", "minimum": 0.0, "maximum": 100.0 },
+            "search_pct": { "type": "number", "minimum": 0.0, "maximum": 100.0 },
+            "social_pct": { "type": "number", "minimum": 0.0, "maximum": 100.0 },
+            "direct_pct": { "type": "number", "minimum": 0.0, "maximum": 100.0 },
+            "referral_pct": { "type": "number", "minimum": 0.0, "maximum": 100.0 }
+          }
+        }
+      }
+    },
+    "Card2Data": {
+      "type": "object",
+      "required": ["summary", "actions"],
+      "properties": {
+        "summary": { "type": "string" },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type", "title", "description", "impact"],
+            "properties": {
+              "type": { "type": "string", "enum": ["opportunity", "warning", "action"] },
+              "title": { "type": "string" },
+              "description": { "type": "string" },
+              "impact": { "type": "string", "enum": ["high", "medium", "low"] }
+            }
+          }
+        },
+        "benchmarks": { "$ref": "#/$defs/BenchmarkData" }
+      }
+    },
+    "Card3Data": {
+      "type": "object",
+      "required": ["human_pct", "bot_pct", "ai_rag_hits", "ai_training_hits", "search_hits"],
+      "properties": {
+        "human_pct": { "type": "number", "minimum": 0.0, "maximum": 100.0 },
+        "bot_pct": { "type": "number", "minimum": 0.0, "maximum": 100.0 },
+        "ai_rag_hits": { "type": "integer", "minimum": 0 },
+        "ai_training_hits": { "type": "integer", "minimum": 0 },
+        "search_hits": { "type": "integer", "minimum": 0 },
+        "benchmarks": { "$ref": "#/$defs/BenchmarkData" }
+      }
+    },
+    "BenchmarkData": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "enum": ["active", "pending_k_threshold", "unclassified"] },
+        "vertical": { "type": "string" },
+        "vertical_label": { "type": "string" },
+        "nodes_in_benchmark": { "type": "integer" },
+        "k_threshold_satisfied": { "type": "boolean" },
+        "metrics": { "type": "object" }
+      }
+    }
+  }
+}

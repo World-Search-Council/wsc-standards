@@ -412,5 +412,5 @@ window.WSC.flush();
 To implement the WSC Standard on **Shopify, Drupal, TYPO3, Laravel, or Headless Next.js**:
 1. **Client**: Embed `wsc-tracker.js` and set `window.WSC_CONFIG.endpoint` to the platform's ingest handler.
 2. **Edge Ingest**: Receive events, enrich with server headers, encrypt via AES-256-CBC, and append to a local queue.
-3. **Cron Exporter**: Dispatch batches to `POST https://api.worldseocouncil.com/v1/ingest` signed with HMAC-SHA256.
+3. **Cron Exporter**: Dispatch batches to `POST https://api.worldsearchcouncil.org/v1/ingest` signed with HMAC-SHA256.
 4. **Webhook Handler**: Expose an endpoint for `POST /internal/webhook` or `/api/wsc/webhook` to receive the 3-Card Reports.

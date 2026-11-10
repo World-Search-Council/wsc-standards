@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://specs.worldseocouncil.com/v1/dashboard-3cards.schema.json",
+  "$id": "https://specs.worldsearchcouncil.org/v1/dashboard-3cards.schema.json",
   "title": "WSC Canonical 3-Card Dashboard Report",
   "type": "object",
   "required": ["version", "updated_at", "card1", "card2", "card3"],

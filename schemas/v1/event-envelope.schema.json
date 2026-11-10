@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://specs.worldseocouncil.com/v1/event-envelope.schema.json",
+  "$id": "https://specs.worldsearchcouncil.org/v1/event-envelope.schema.json",
   "title": "WSC Telemetry Event Envelope",
   "type": "object",
   "required": ["events"],

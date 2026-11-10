@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://specs.worldseocouncil.com/v1/domain-health.schema.json",
+  "$id": "https://specs.worldsearchcouncil.org/v1/domain-health.schema.json",
   "title": "WSC Domain & Tech Health Sentinel Report",
   "type": "object",
   "required": [

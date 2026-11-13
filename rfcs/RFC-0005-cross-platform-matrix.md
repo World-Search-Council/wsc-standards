@@ -1,172 +1,116 @@
-# WSC Cross-Platform Feature & Architecture Matrix
-**Single Source of Truth (SSOT): WordPress Plugin v2.2.1**  
-*Datum:* 6. September 2026 | *Status:* Genehmigt zur Portierungsplanung | *Scope:* WordPress, Shopware 6, Shopify, Drupal, Joomla, Magento 2
+# RFC-0005: Cross-Platform Feature & Architecture Matrix (`v2.2.3`)
+
+- **RFC ID:** `RFC-0005`
+- **Status:** `Standard` (100% Implemented & Verified — 84/84 Parity Checks)
+- **Single Source of Truth (SSOT):** [`wsc-search-health`](https://github.com/World-Search-Council/wsc-search-health) (`v2.2.3`)
+- **Last Updated:** November 13, 2026
+- **Scope:** WordPress 6.0+, Shopware 6.5/6.6, Shopify Cloud, Drupal 8–11, Drupal 7 LTS, Joomla 4/5, Magento 2 / Adobe Commerce
 
 ---
 
-## 1. Leitphilosophie & Best Practice für Multi-Platform Architecture
+## 1. Architectural Philosophy & Adapter Pattern
 
-Um eine Codebasis über 6 unterschiedliche CMS- und E-Commerce-Ökosysteme wartbar, konsistent und release-sicher zu halten, gilt das **Adapter-Pattern auf Basis einer geteilten Core-Architektur**:
+To maintain strict behavioral, cryptographic, and visual parity across **7 heterogeneous CMS and e-commerce ecosystems**, all official WSC connectors implement a unified **Adapter Pattern over Canonical Wire Contracts**:
 
 ```mermaid
 graph TD
     subgraph "Single Source of Truth (SSOT)"
-        WP["WordPress Plugin v2.2.1\n(Referenz-Implementierung)"]
+        WP["WordPress Plugin v2.2.3\n(wsc-search-health)"]
     end
 
-    subgraph "Shared Platform Contracts & Core Logic"
-        Contracts["WSC Canonical Contracts\n(Event Schemas, 7-Card JSON, Crypto Spec)"]
-        PHPCore["WSC PHP Core Engine / SDK\n(Crypto, SQLite WAL, Bot Signatures, Webhook Hashing)"]
-        FEScript["WSC Unified DOM Tracker\n(Vanilla JS / Web Pixel)"]
+    subgraph "Canonical Wire Contracts & Core Primitives"
+        Contracts["WSC Gateway v2.3 & Portal v2.3.1 Contracts\n(/v1/register, /v1/ingest, /v1/ai-coverage/query,\n/v1/benchmarks/*, /api/v1/license/verify)"]
+        PHPCore["WSC PHP Edge Pattern\n(AES-256-CBC, HMAC-SHA256 api_secret,\nZero-PII SQLite WAL, SSRF Public-DNS Guard)"]
+        FEScript["WSC Unified Client Runtime\n(Vanilla ES6 Tracker / Shopify Web Pixel)"]
     end
 
-    WP -->|Definiert Standards| Contracts
+    WP -->|Defines Canonical Spec| Contracts
     Contracts --> PHPCore
     Contracts --> FEScript
 
-    subgraph "Platform Adapters (Bridges)"
-        SW6["Shopware 6 Plugin\n(Symfony Subscribers, Vue.js Admin)"]
-        SHOPIFY["Shopify Cloud App\n(Web Pixel, Webhooks, Metafields, Polaris React)"]
-        DRUPAL["Drupal 8-11 Module\n(EventSubscribers, Commerce, Twig/Alpine)"]
-        JOOMLA["Joomla 4/5 Component\n(System Plugin, MVC Admin)"]
-        MAGENTO["Magento 2 Module\n(Interceptors, Observers, Adminhtml)"]
+    subgraph "6 Sister Platform Connectors (v2.2.3)"
+        SW6["Shopware 6 (v2.2.3)\nwsc-core-shopware6"]
+        SHOPIFY["Shopify Cloud (v2.2.3)\nwsc-shopify"]
+        DRUPAL["Drupal 8-11 (v2.2.3)\nwsc-core-drupal"]
+        DRUPAL7["Drupal 7 (7.x-2.2.3)\nwsc-core-drupal7"]
+        JOOMLA["Joomla 4/5 (v2.2.3)\nwsc-core-joomla"]
+        MAGENTO["Magento 2 (v2.2.3)\nwsc-core-magento2"]
     end
 
     PHPCore --> SW6
     PHPCore --> DRUPAL
+    PHPCore --> DRUPAL7
     PHPCore --> JOOMLA
     PHPCore --> MAGENTO
     Contracts --> SHOPIFY
     FEScript --> SW6
     FEScript --> DRUPAL
+    FEScript --> DRUPAL7
     FEScript --> JOOMLA
     FEScript --> MAGENTO
-    FEScript -.->|Native Web Pixel API| SHOPIFY
+    FEScript -.->|Sandboxed Web Pixel API| SHOPIFY
 ```
 
-### Die 3 goldenen Architektur-Regeln
-1. **Zero-Local Aggregation**: Kein CMS führt eigene OLAP-Aggregationsberechnungen durch. Sämtliche mathematischen Durchschnitte, Deltas, AI-RAG-Anteile und Performance-Scores werden im zentralen WSC Gateway / ClickHouse berechnet und per Push-Report (Webhook oder Metafield) geliefert.
-2. **Kanonische Datenverträge (Strict Schemas)**: Das vom WordPress-Plugin empfangene und gerenderte JSON-Schema der 7-Card-Suite ist für alle CMS-Systeme identisch.
-3. **Plattform-spezifische Trennung**:
-   - **PHP-basierte Plattformen (Shopware, Drupal, Joomla, Magento)**: Nutzen die gleiche SQLite-Edge-Queue (`queue_temp.sqlite`), dieselbe AES-256-Verschlüsselung und denselben HMAC-SHA256 Webhook-Empfänger.
-   - **Shopify Cloud (SaaS)**: Nutzt die serverlose Architektur (Sandboxed Web Pixel ➔ Gateway ➔ GraphQL Metafields ➔ Polaris React).
+### Mandatory Ecosystem Rules (`v2.2.3`)
+
+1. **Strict Gateway-Only Telemetry & Zero Outbound Port 25:** No CMS or storefront connector ever connects directly to ClickHouse or TCP Port 25. All cloud synchronization, Sentinel scans, SpeedSentinel audits, and AI Coverage queries flow strictly through `https://api.worldsearchcouncil.org` authenticated via `HMAC-SHA256` (`X-WSC-Sig` with `api_secret`) and encrypted via `AES-256-CBC`.
+2. **100% Cookieless, Strict Zero-PII & Strict Opt-In:** Connectors never set analytics cookies, never store raw client IP addresses in local SQLite queues (`SHA256(IP + UA + DailySalt)`), and never transmit external handshakes prior to explicit administrator opt-in (`hybrid_enabled = false/0`, `indexnow_enabled = false/0`).
+3. **Live Authority Portal Bridge & 100% Ad-Free Licensed Workspaces:** Credentials (`WSC-MEMBER-*`, `WSC-AGENCY-*`, `WSC-PARTNER-*`) validate live against `POST https://www.worldsearchcouncil.org/api/v1/license/verify` (while keeping 100% of local features unlocked without any license key). Active licensed installs suppress all partner/sponsor placements and enable bidirectional Agency Co-Branding.
+4. **SSRF & Same-Host Isolation:** Every CMS-initiated SpeedSentinel and Domain Sentinel trigger validates public DNS resolution (`FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE` / non-private IP checks) and enforces exact hostname matching against the registered site domain.
 
 ---
 
-## 2. Detaillierte Feature- & Funktionsmatrix (SSOT)
+## 2. 7-Platform Feature & Wire-Contract Matrix (`v2.2.3`)
 
-Die folgende Matrix bildet alle Module, Klassen und Methoden der WordPress-Referenz ([`wsc-search-health-wordpress-plugin`](file:///home/benjamin/Documents/GitHub/world-seo-council/wsc-search-health-wordpress-plugin)) auf die entsprechenden Ziel-Plattformen ab.
+### Layer 1: Telemetry, Zero-PII Sensors & E-Commerce Ingress
 
-### Schicht 1: Telemetrie, Sensorik & Datenerfassung (Ingress)
-
-| Feature / Funktion | WordPress SSOT Klasse / Hook | Shopware 6 | Shopify Cloud | Drupal (8-11) | Joomla (4/5) | Magento 2 |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Client-Side DOM Tracker** | `assets/js/wsc-tracker.js` (Pageview, Engaged Time, Scroll 25-100%, TTFI, Focus, Outbound) | Storefront Script via `StorefrontRenderEvent` | Sandboxed Web Pixel (`extensions/wsc-web-pixel`) | `hook_page_attachments` Library | System Plugin `onAfterDispatch` | Layout XML `default.xml` Block |
-| **Bot & AI Crawler Interceptor** | `class-wsc-bot-tracker.php` (`plugins_loaded`, Pre-Cache Hook) | `KernelEvents::REQUEST` Subscriber (Prio 2048, vor HTTP-Cache) | *Nicht nativ möglich* (Erfassung via Cloudflare / Gateway Edge Proxy) | `KernelEvents::REQUEST` Subscriber (Prio 300) | `onAfterInitialise` Event | `aroundDispatch` Interceptor auf `FrontController` |
-| **E-Commerce Order Capture** | `class-wsc-woocommerce.php` (`woocommerce_thankyou` / `order_status_completed`) | `CheckoutOrderPlacedEvent` Subscriber | Webhook `orders/paid` an Gateway `/v1/shopify/webhook` | `hook_entity_insert` auf `commerce_order` | Order Event in VirtueMart / HikaShop | `sales_order_place_after` Observer |
-| **E-Commerce Funnel Tracking** | `product_view`, `add_to_cart`, `initiate_checkout` in `class-wsc-woocommerce.php` | Storefront Controller AJAX / DOM Hooks | Standard Web Pixel Analytics Events | Drupal Commerce EventSubscribers | JS Tracker eCommerce Erweiterung | Frontend Customer Data Private Content |
-| **UTM & Campaign Ingestion** | `class-wsc-campaigns.php` (Auto-Parsing `utm_*`, Channel Attribution) | PHP Request Ingestion & JS Cookie/Session | Web Pixel `context.document.location` | Request EventSubscriber | System Plugin Request Filter | Request Plugin / Cookie Reader |
+| Capability | [WordPress](https://github.com/World-Search-Council/wsc-search-health) | [Shopware 6](https://github.com/World-Search-Council/wsc-core-shopware6) | [Shopify](https://github.com/World-Search-Council/wsc-shopify) | [Drupal 8–11](https://github.com/World-Search-Council/wsc-core-drupal) | [Drupal 7](https://github.com/World-Search-Council/wsc-core-drupal7) | [Joomla 4/5](https://github.com/World-Search-Council/wsc-core-joomla) | [Magento 2](https://github.com/World-Search-Council/wsc-core-magento2) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Release Version** | `2.2.3` | `2.2.3` | `2.2.3` | `2.2.3` | `7.x-2.2.3` | `2.2.3` | `2.2.3` |
+| **Client DOM Tracker** | `assets/js/wsc-tracker.js` | Storefront Script | Sandboxed Web Pixel | `hook_page_attachments` | `hook_init` (`wsc-tracker.js`) | `onBeforeCompileHead` | `default.xml` (`Tracker.php`) |
+| **Zero-PII Session Hash** | `SHA256(IP+UA+Salt)` | `SHA256(IP+UA+Salt)` | Edge Zero-PII | `SHA256(IP+UA+Salt)` | `SHA256(IP+UA+Salt)` | `SHA256(IP+UA+Salt)` | `SHA256(IP+UA+Salt)` |
+| **Pre-Cache Bot Sensor** | `plugins_loaded` | `KernelEvents::REQUEST` | Gateway / App Proxy | `KernelEvents::REQUEST` | `hook_boot()` | `onAfterInitialise` | `FrontControllerPlugin` |
+| **Server-Side Orders** | `WSC_WooCommerce` | `CheckoutOrderPlacedEvent` | `orders/paid` Webhook | `commerce_order` Hook | `wsc_daily_overview` / Views 3 | VirtueMart / HikaShop | `OrderPlaceAfterObserver` |
 
 ---
 
-### Schicht 2: Edge-Storage, Kryptographie & Cloud-Synchronisation
+### Layer 2: Gateway `v2.3` Wire Contract, SQLite WAL & Cryptography
 
-| Feature / Funktion | WordPress SSOT Klasse / Spezifikation | Shopware 6 | Shopify Cloud | Drupal (8-11) | Joomla (4/5) | Magento 2 |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **SQLite Queue Engine** | `class-wsc-analytics.php` (`queue_temp.sqlite` in WAL-Modus) | `var/wsc_analytics/queue_temp.sqlite` via SQLite3 | *Entfällt* (Web Pixel sendet direkt via HTTPS an Gateway) | `private://wsc_analytics/queue_temp.sqlite` | `administrator/cache/wsc/queue_temp.sqlite` | `var/wsc_analytics/queue_temp.sqlite` |
-| **Batch Encryption & Dispatch** | `class-wsc-analytics.php` (AES-256-CBC mit `local_aes_key`, HMAC `X-WSC-Sig`) | `WscBatchSyncService` via `ScheduledTask` (5 Min.) | *Entfällt* (Gateway sichert Ingestion) | `WscSyncWorker` via Drupal Cron | Joomla System Task / Cron Plugin | Magento Cronjob (`crontab.xml`) |
-| **HMAC Webhook Receiver** | `class-wsc-core.php` (`POST /wp-json/wsc/v1/webhook`) | Storefront/API Controller `POST /api/wsc/webhook` | Gateway mutiert via GraphQL `metafieldsSet` | Controller `POST /api/wsc/webhook` | Component Controller `index.php?option=com_wsc&task=webhook` | Controller `POST /wsc/api/webhook` |
-| **SQLite Report Store** | `class-wsc-data.php` (`reports_temp.sqlite` / Options Cache) | `reports_temp.sqlite` + System Config Cache | Shopify Shop Metafield (`namespace: "wsc_analytics"`) | `reports_temp.sqlite` + State API | `reports_temp.sqlite` + Extension Params | `reports_temp.sqlite` + Core Flag / Cache |
-
----
-
-### Schicht 3: Die kanonische 7-Card Report Suite (Analytics Hub)
-
-Alle Plattformen rendern dieselbe visuelle Logik basierend auf den vom Gateway gelieferten Payloads:
-
-| Bento Card | SSOT Schlüssel | Kern-Metriken & Visualisierung | UI-Komponente (WordPress SSOT) | Ziel-UI (Shopware 6 / Shopify / Drupal) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Card 1: Real Visitors & Traffic** | `card1_traffic` | Unique Visitors, Pageviews, Engaged Time, Orders, Conversion Revenue, WoW/MoM Sparkline, Multi-Period Selector (1d, 7d, 30d, 90d, 180d, 365d) | `assets/js/wsc-dashboard.js` & `class-wsc-dashboard-cards.php` | **SW6:** Vue.js Component<br>**Shopify:** `WscTrafficCard.jsx`<br>**Drupal:** Twig + Chart.js |
-| **Card 2: Strategic Insights** | `card2_insights` | Automatisch generierte Text-Insights, Traffic-Trends, Anomalie-Warnungen, Top-Konvertierer, Handlungsempfehlungen | Bento Card Template (`wsc-card-insights`) | **SW6:** Vue.js Component<br>**Shopify:** `WscInsightsCard.jsx`<br>**Drupal:** Twig Template |
-| **Card 3: Bot Shield & AI Scrapers** | `card3_bots` | Human vs. Bot Ratio, AI RAG Bots (Perplexity, OAI-Search), AI Training Scraper (GPTBot, ClaudeBot), Search Indexers | 3-Segment Donut Chart + Bot-Typ Aufschlüsselung | **SW6:** Vue.js Component<br>**Shopify:** `WscBotCard.jsx`<br>**Drupal:** Twig + SVG Chart |
-| **Card 4: Engagement & UX Reality** | `card_engagement` | Engaged Reading Time (Ø), TTFI (Time to First Interaction), Scroll-Meilensteine (25/50/75/100%), UX Badges (*Deep Reader Favorite*, *Intent Mismatch*) | 4-Säulen Milestone Bar + UX Diagnose-Chips | **SW6:** Vue.js Component<br>**Shopify:** `WscEngagementCard.jsx`<br>**Drupal:** Twig Component |
-| **Card 5: Outbound Link Intelligence** | `card_outbound` | Kategoriematrix externer Klicks (Jobs, Social, Affiliate, Reference), Top 10 Ziel-Domains | Horizontale Kategorie-Balken + Domain-Tabelle | **SW6:** Vue.js Component<br>**Shopify:** `WscOutboundCard.jsx`<br>**Drupal:** Twig Component |
-| **Card 6: E-Commerce Funnel Reality** | `card_ecommerce` | 4-Stufen Checkout-Ampel (Views ➔ Carts ➔ Checkout ➔ Sale), Drop-off Leaks, Product Velocity Matrix, Coupon Margin Protection | Interaktiver Funnel-Trichter + Velocity Scatter Matrix | **SW6:** Vue.js Component<br>**Shopify:** `WscEcommerceCard.jsx`<br>**Drupal:** Commerce Dashboard |
-| **Card 7: Sentinel Domain Health** | `domain_health` / `sentinel` | DNS Redundanz, DNSSEC, Port-25-freie Mail-Sicherheit (MX, SPF, DMARC), SSL Zertifikatslaufzeit, Security Header, Drift-Status | Bento Health Ampel mit Proactive Action Remediation | **SW6:** Vue.js Component<br>**Shopify:** `WscSentinelCard.jsx`<br>**Drupal:** Status Report View |
+| Capability | WordPress SSOT | Shopware 6 | Shopify Cloud | Drupal 8–11 | Drupal 7 | Joomla 4/5 | Magento 2 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Strict Opt-In Default** | `hybrid = 0` | `hybrid = false` | `hybrid = false` | `hybrid = false` | `hybrid = 0` | `hybrid = 0` | `hybrid = 0` |
+| **`POST /v1/register` (`v2.3`)** | `project_id` + `api_secret` | `project_id` + `api_secret` | `project_id` + `api_secret` | `project_id` + `api_secret` | `project_id` + `api_secret` | `project_id` + `api_secret` | `project_id` + `api_secret` |
+| **`POST /v1/ingest` Envelope** | `AES-256-CBC` + `api_secret` HMAC | `AES-256-CBC` + `api_secret` HMAC | Gateway Pixel / Proxy | `AES-256-CBC` + `api_secret` HMAC | `AES-256-CBC` + `api_secret` HMAC | `AES-256-CBC` + `api_secret` HMAC | `AES-256-CBC` + `api_secret` HMAC |
+| **Edge Storage Engine** | Dual SQLite `WAL` | `var/wsc_analytics/*.sqlite` | GraphQL Metafields (`wsc_analytics`) | `private://wsc_analytics/*.sqlite` | `private://wsc_analytics/*.sqlite` | `administrator/cache/wsc_analytics` | `var/wsc_analytics/*.sqlite` |
+| **Multi-Period Switcher** | `1d`–`365d` | `1d`–`365d` | `1d`–`365d` | `1d`–`365d` | `1d`–`365d` | `1d`–`365d` | `1d`–`365d` |
 
 ---
 
-### Schicht 4: Spezial-Engines & Hub-Erweiterungen
+### Layer 3: Canonical 7-Card Bento Suite
 
-| Engine / Modul | WordPress SSOT Klasse | Funktionsumfang & Gateway Schnittstelle | Portierungs-Anforderung für andere Plattformen |
-| :--- | :--- | :--- | :--- |
-| **SpeedSentinel 2.0** | `class-wsc-pagespeed.php` & `class-wsc-health-admin.php` | Asynchrone Audits (`POST /v1/pagespeed/audit` ➔ HTTP 202). Dual-Indicator Thermometer (🤖 RAG Readiness vs. 👤 Human Core Web Vitals LCP, TBT, CLS, FCP, TTFB). | Frontend Trigger Button + Polling Controller (120s Transient) + Thermometer Canvas/SVG Rendering. |
-| **AI Coverage URL Inspector** | `class-wsc-ai-coverage.php` & `class-wsc-ai-inspector-admin.php` | REST-Proxy (`POST /v1/ai-coverage/query`). URL-Eingabe mit Schnellwahl. Visualisierung von RAG Bot Crawls vs. Training Scraper Besuchen. | API Controller zur Weiterleitung signierter HMAC-Anfragen + AJAX Inspector Suchleiste im Dashboard. |
-| **Sentinel Studio 2.2.1** | `class-wsc-tech-health.php` | Asynchroner Scan (`POST /v1/sentinel/scan` ➔ HTTP 202). Polling Transient, animiertes Live-Step Banner (DNSSEC ➔ Mail ➔ SSL ➔ Drift). | REST-Route im CMS + UI Progress-Banner Controller (`initSentinelStudio`). |
-| **WSC Membership & Partner Feed** | `class-wsc-membership.php` | Lizenzverifizierung (`/v1/license`), automatischer wöchentlicher Check, Partner Directory Feed mit 12h Cache, Co-Branding. | Standardisierter Lizenz-Schlüssel in Plugin-Settings + Partner-Feed Caching im CMS-Config-Speicher. |
-| **Sponsor Engine & Placements** | `class-wsc-sponsors.php` | Werbefreiheit für WSC-Mitglieder (`is_active_licensed()`), Spotlight Bento Card mit 14-Tage Dismissal, Kontext-Banner Slots. | Gating-Funktion: Anzeigen nur rendern, wenn Lizenz unbezahlt/Free. Dismissal-Status in LocalStorage oder UserSettings speichern. |
-| **Smart Questions Engine** | `class-wsc-smart-questions.php` | Heuristische Matrix für proaktive Fragen bei Daten-Anomalien (z. B. AI-Traffic Spike, Checkout Drop-off). | Evaluierungs-Funktion bei Laden des Dashboards. |
+All 7 platforms ingest and render the identical 7-Card Bento report schema across `1d`, `7d`, `30d`, `90d`, and `365d` windows:
 
----
-
-### Schicht 5: 5-Hub Navigations-Konzept & UI Frameworks
-
-Das WordPress-Plugin gliedert sich in 5 Hubs. Die Portierung in die Zielsysteme nutzt die nativen Navigationsmuster des jeweiligen CMS:
-
-```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ Hub 1: 🎛️ Command Center (Bento Grid, Pinned Cards, Fast Scan Action)                   │
-│ Hub 2: 📊 Live Telemetry & Traffic (Real Visitors Studio, Bot Shield, E-Commerce Funnel)│
-│ Hub 3: 🔍 SEO & Indexing Suite (Scoreboard, Meta Tools, Schema Markup, IndexNow)       │
-│ Hub 4: 🛡️ Tech Health & Sentinel (SpeedSentinel, Sentinel Studio, 404 & Redirects)     │
-│ Hub 5: ⚙️ Settings & Governance (Credentials, Module Whitelist, Data Privacy, Lizenz)  │
-└────────────────────────────────────────────────────────────────────────────────────────┘
-```
-
-#### Framework-Mapping:
-* **WordPress**: Native WordPress Admin Theme, Dashicons, Vanilla JS + ECharts (`assets/js/wsc-dashboard.js`).
-* **Shopware 6**: Shopware Administration Module auf Basis von **Vue.js 3 / Twig**, Integration in Hauptmenü unter `Marketing` ➔ `World Search Council`.
-* **Shopify Cloud**: **Shopify App Bridge & Polaris React** (`@shopify/polaris`), eingebettet direkt im Shopify Merchant Admin.
-* **Drupal (8–11)**: **Drupal Admin Controller + Twig Templates**, Styling via Drupal Claro Admin Theme & Modern CSS Grid.
-* **Joomla (4/5)**: **Joomla MVC Administrator Component** (`com_wsc_analytics`) mit Atum Admin Layout und CSS Grid.
-* **Magento 2**: **Adminhtml Block & Layout XML** unter `Marketing` ➔ `WSC Analytics`, UI-Components mit Knockout.js oder Vanilla ES6.
+| Bento Card | Canonical Key | Core Metrics & Diagnostics |
+| :--- | :--- | :--- |
+| **Card 1: Real Visitors & Traffic** | `card1_traffic` | Unique Visitors, Pageviews, Engaged Time, Orders, Revenue, Channel Attribution (AI, Search, Social, Direct, Referral). |
+| **Card 2: Strategic Insights** | `card2_insights` | Algorithmic growth summaries, anomaly alerts, and prioritized SEO/GEO/UX action items. |
+| **Card 3: Bot Shield & AI Crawlers** | `card3_bots` | Human vs. Bot ratio, Live RAG Retrieval Agents (`ChatGPT-User`, `OAI-SearchBot`, `PerplexityBot`), AI Training Scrapers (`GPTBot`, `ClaudeBot`, `CCBot`), and Search Spiders (`Googlebot`, `Bingbot`). |
+| **Card 4: Engagement & UX Reality** | `card_engagement` | Active Engaged Reading Time, Time to First Interaction (TTFI), Scroll Milestones (`25%`/`50%`/`75%`/`100%`), and UX Verdict chips. |
+| **Card 5: Outbound Link Intelligence** | `card_outbound` | Categorized external clicks (`Jobs`, `Social`, `Affiliate`, `Reference`) and top destination domains. |
+| **Card 6: E-Commerce Funnel Reality** | `card_ecommerce` | 4-Stage Checkout Funnel (`Product Views` → `Add to Cart` → `Initiate Checkout` → `Purchase`), drop-off diagnosis, and product velocity. |
+| **Card 7: Domain & Speed Sentinel** | `domain_health` + `pagespeed` | Port-25-free DNSSEC, MX/SPF/DMARC, X.509 SSL lifecycle, 6/6 Security Headers, Drift status, and **SpeedSentinel 2.0 Dual-Thermometer** (🤖 RAG Readiness vs. 👤 Human CWV). |
 
 ---
 
-## 3. Strategischer Umsetzungs-Fahrplan (Roadmap)
+### Layer 4: Specialized Engines, Authority Portal Bridge & AI Discovery (`v2.2.3`)
 
-### Phase 1: Shared PHP Core SDK & Kanonische Schemas (Fundament)
-1. **Extraktion des `wsc-php-core`**:
-   - Bereitstellung einer leichtgewichtigen, vendor-unabhängigen PHP-Bibliothek (PHP 8.1+) mit den Klassen:
-     - `WscCrypto`: AES-256-CBC Payload Encryption & HMAC-SHA256 Signatures.
-     - `WscSqliteStorage`: WAL-Modus Queue- und Report-Verwaltung.
-     - `WscBotDetector`: Regex-Signaturen für AI RAG, Scraper und Suchmaschinen.
-     - `WscContractValidator`: Validierung empfangener Webhook-Payloads gegen die 7-Card Schemas.
-2. **Kanonische JSON-Schemata exportieren**:
-   - OpenAPI / JSON-Schema Spezifikationen für alle 7 Bento Cards und Worker-Push-Payloads zur Validierung in Tests.
-
-### Phase 2: Shopware 6 (`wsc-core-shopware6`) auf v2.2 Standard
-1. **Backend**:
-   - Einbindung des `WscBatchSyncService` und des `WscWebhookController` mit voller Unterstützung für die 7-Card Payloads.
-   - Anbindung des `CheckoutOrderPlacedEvent` für das 4-Stufen E-Commerce Funneling.
-2. **Vue.js Administration**:
-   - Modernisierung der Vue-Komponenten im Shopware-Admin auf das 5-Hub Bento-Grid.
-   - Einbindung von SpeedSentinel & Sentinel Studio mit asynchronem Scan-Trigger.
-
-### Phase 3: Shopify Embedded App (`wsc-shopify`) auf v2.2 Standard
-1. **GraphQL Metafield Sync**:
-   - Erweiterung des Gateway-Dispatchers zur Speicherung aller 7 Cards im Shop-Metafield `wsc_analytics:dashboard_cards`.
-2. **Polaris React UI**:
-   - Erstellung der fehlenden Karten (`WscEngagementCard.jsx`, `WscOutboundCard.jsx`, `WscEcommerceCard.jsx`, `WscSentinelCard.jsx`).
-   - Implementierung des 5-Hub Tab-Layouts mit `@shopify/polaris`.
-   - SpeedSentinel Trigger über Gateway REST API mit Polling.
-
-### Phase 4: Drupal (8–11) & Joomla (4/5) Synchronisation
-1. **Drupal Commerce & Twig Admin**:
-   - Update des `WscWebhookController` und Erweiterung des `wsc-dashboard.html.twig` auf das 7-Card Bento Raster.
-2. **Joomla Administrator Component**:
-   - Modernisierung von `com_wsc_analytics` auf Joomla 5 native Service-Provider und 7-Card Views.
-
-### Phase 5: Magento 2 Adapter
-1. **Observer & Adminhtml**:
-   - Validierung von `sales_order_place_after` und Aktualisierung des Adminhtml Dashboard Blocks auf die 7-Card Suite.
+| Engine / Endpoint | WordPress SSOT | Shopware 6 | Shopify Cloud | Drupal 8–11 | Drupal 7 | Joomla 4/5 | Magento 2 |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **SpeedSentinel 2.0 (`/v1/pagespeed/audit`) + SSRF Guard** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Port-25-Free Sentinel (`/v1/sentinel/scan`) + SSRF Guard** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **AI Coverage Inspector (`/v1/ai-coverage/query` + Local Fallback)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Dynamic Cloud Benchmarks (`/v1/benchmarks/{query,classify}`)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Live WSC Member Verify (`/api/v1/license/verify` + Co-Branding)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Featured Partners (`/api/v1/partners/featured`, 100% Ad-Free Licensed)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Dynamic `/llms.txt` AI Discovery Manifest** | `/llms.txt` | `/llms.txt` | `/apps/wsc/llms.txt` | `/llms.txt` | `/llms.txt` | `/llms.txt` | `/llms.txt` |
+| **Opt-In `IndexNow` + Auto-Content/Product Hook + `/{key}.txt`** | `save_post` | `WscProductSubscriber` | `products/update` | `hook_entity_*` | `hook_node_*` | `onContentAfterSave` | `ProductSaveAfterObserver` |

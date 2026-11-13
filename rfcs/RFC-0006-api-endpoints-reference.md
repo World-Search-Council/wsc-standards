@@ -4,7 +4,19 @@ This document provides complete technical specifications for all public, interna
 
 ---
 
-## 1. Central Gateway Endpoints (`wsc-gateway-2`)
+## 1. Central Gateway Endpoints (`https://api.worldsearchcouncil.org` — `v2.3.0`)
+
+### 1.0 Health Probe & Prometheus OpenMetrics Exporter
+
+* **Health Endpoint**: `GET /v1/health` (alias: `GET /health`)
+  * **Authentication**: Public
+  * **Response (`200 OK`)**: `{"status": "ok", "version": "2.3.0", "mysql": "up", "redis": "up", "clickhouse": "up"}`
+* **Prometheus Metrics Endpoint**: `GET /metrics`
+  * **Authentication**: Optional `Authorization: Bearer <METRICS_BEARER_TOKEN>` (when `METRICS_BEARER_TOKEN` is configured)
+  * **Content-Type**: `text/plain; version=0.0.4; charset=utf-8`
+  * **Exposed Metrics**: HTTP request counters & latency histograms (`/__unmatched_404__` scanner cardinality protection), `/v1/ingest` batch & event throughput, passive RabbitMQ queue depths & consumer counts across all 8 primary/DLX queues, ClickHouse query latency (`wsc_clickhouse_ping_duration_seconds`), and upstream dependency health (`wsc_dependency_up`).
+
+---
 
 ### 1.1 Project Registration
 
@@ -20,7 +32,8 @@ Registers a new CMS or shop instance and establishes cryptographic credentials.
   "domain": "https://example.com",
   "local_aes_key": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
   "platform": "shopware6",
-  "webhook_url": "https://example.com/api/wsc/webhook"
+  "webhook_url": "https://example.com/api/wsc/webhook",
+  "version": "2.2.3"
 }
 ```
 
@@ -59,6 +72,8 @@ Receives encrypted micro-batches of telemetry events from CMS instances.
 {
   "project_id": "proj_a1b2c3d4e5f67890",
   "timestamp": 1724930000,
+  "source": "shopware6",
+  "version": "2.2.3",
   "data": [
     "BASE64_ENCRYPTED_IV_AND_CIPHERTEXT_ROW_1",
     "BASE64_ENCRYPTED_IV_AND_CIPHERTEXT_ROW_2"
@@ -67,11 +82,11 @@ Receives encrypted micro-batches of telemetry events from CMS instances.
 ```
 
 #### Decrypted Micro-Batch Payload Structure
-Each string in `data` decrypts (via `AES-256-CBC` + `local_aes_key`) into the canonical envelope:
+Each string in `data` decrypts (via `AES-256-CBC` + `local_aes_key`) into the canonical Zero-PII envelope:
 ```json
 {
   "server_data": {
-    "ip": "203.0.113.195",
+    "session_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36...",
     "headers": {
       "referer": "https://google.com/",
@@ -399,18 +414,34 @@ Returns immediate `PageSpeedAuditReport` payload containing `rag_readiness`, `hu
 
 ---
 
+### 1.9 Historical & Latest Bento Reports Pull (`/v1/reports`)
+
+Allows CMS connectors (including localhost/staging sites without inbound webhook reachability) to pull assembled 7-Card Bento snapshots and up to 730 days (2 years) of paginated historical time series directly from ClickHouse.
+
+* **Endpoint**: `GET /v1/reports`
+* **Authentication**: Header `X-WSC-Sig` (HMAC-SHA256 signature)
+* **Query Parameters**:
+  * `project_id`: Registered `proj_...` identifier
+  * `mode`: `latest` | `history` | `overview`
+  * `days`: `1`..`730`
+  * `limit` & `offset`: Chunked pagination (`pagination.has_more`, `pagination.next_offset`)
+  * `include_cards` / `include_daily` / `card_types` / `trigger_push`
+
+---
+
 ## 2. Remote CMS & Shop Webhook Endpoints
 
 When the Gateway dispatches insights, it makes an authenticated POST request to the remote instance:
 
-| Platform | Webhook Endpoint URL |
-| :--- | :--- |
-| **WordPress / WooCommerce** | `POST {domain}/wp-json/wsc/v1/webhook` |
-| **Drupal 8 / 9 / 10 / 11** | `POST {domain}/api/wsc/webhook` |
-| **Drupal 7** | `POST {domain}/api/wsc/webhook` |
-| **Joomla 4 / 5** | `POST {domain}/index.php?option=com_wsc_analytics&task=webhook.receive` |
-| **Shopware 6** | `POST {domain}/api/wsc/webhook` |
-| **Magento 2** | `POST {domain}/wsc/api/webhook` |
+| Platform | Webhook Endpoint URL | AI Manifest (`/llms.txt`) |
+| :--- | :--- | :--- |
+| **WordPress / WooCommerce** | `POST {domain}/wp-json/wsc/v1/webhook` | `GET {domain}/llms.txt` |
+| **Drupal 8 / 9 / 10 / 11** | `POST {domain}/api/wsc/webhook` | `GET {domain}/llms.txt` |
+| **Drupal 7** | `POST {domain}/api/wsc/webhook` | `GET {domain}/llms.txt` |
+| **Joomla 4 / 5** | `POST {domain}/index.php?option=com_wsc_analytics&task=webhook.receive` | `GET {domain}/llms.txt` |
+| **Shopware 6** | `POST {domain}/api/wsc/webhook` | `GET {domain}/llms.txt` |
+| **Magento 2** | `POST {domain}/wsc/api/webhook` | `GET {domain}/llms.txt` |
+| **Shopify (App Proxy)** | `POST {domain}/apps/wsc/webhook` | `GET {domain}/apps/wsc/llms.txt` |
 
 ### Inbound Webhook Headers & Verification
 * **Header**: `X-WSC-Sig: <hex_hmac_sha256>`
@@ -422,12 +453,12 @@ When the Gateway dispatches insights, it makes an authenticated POST request to 
   }
   ```
 
-### Canonical Webhook Payload Body
+### Canonical 7-Card Webhook Payload Body
 ```json
 {
-  "version": "1.5.0",
-  "updated_at": 1724930500,
-  "card1": {
+  "version": "2.2.3",
+  "updated_at": 1763038000,
+  "card1_traffic": {
     "data_7d": {
       "visitors": 1420,
       "pageviews": 5800,
@@ -447,36 +478,28 @@ When the Gateway dispatches insights, it makes an authenticated POST request to 
       "channels": { "ai_pct": 16.0, "search_pct": 45.0, "social_pct": 15.0, "direct_pct": 19.0, "referral_pct": 5.0 }
     }
   },
-  "card2": {
+  "card2_insights": {
     "data_7d": {
       "summary": "AI search traffic increased by 24% after FAQ updates.",
       "actions": [
         { "type": "content", "title": "Expand Product FAQ", "description": "High conversion on FAQ pages.", "impact": "high" }
       ]
-    },
-    "data_30d": {
-      "summary": "Search engines remain primary acquisition channel.",
-      "actions": [
-        { "type": "seo", "title": "Optimize Category Meta", "description": "Category page impressions up.", "impact": "medium" }
-      ]
     }
   },
-  "card3": {
+  "card3_bots": {
     "data_7d": {
       "human_pct": 88.5,
       "bot_pct": 11.5,
       "ai_rag_hits": 420,
       "ai_training_hits": 150,
       "search_hits": 1200
-    },
-    "data_30d": {
-      "human_pct": 86.2,
-      "bot_pct": 13.8,
-      "ai_rag_hits": 1850,
-      "ai_training_hits": 720,
-      "search_hits": 4900
     }
-  }
+  },
+  "card_engagement": { "data_7d": { "avg_engaged_sec": 84, "ttfi_ms": 620, "scroll_75_pct": 48.2 } },
+  "card_outbound": { "data_7d": { "total_clicks": 195, "top_categories": ["Reference", "Social"] } },
+  "card_ecommerce": { "data_7d": { "product_views": 2100, "add_to_cart": 184, "checkout": 96, "orders": 38 } },
+  "domain_health": { "summary": { "overall_health": "GOOD", "ssl_days_left": 64, "headers_score": "6/6" } },
+  "pagespeed": { "rag_readiness": { "s_rag": 94, "t_rag_ms": 185 }, "human_ux": { "score": 92 } }
 }
 ```
 
@@ -523,10 +546,10 @@ Each CMS instance exposes a health and diagnostics endpoint for uptime probes, c
 {
   "status": "healthy",
   "plugin": "WSC Search & Health",
-  "version": "1.5.0",
+  "version": "2.2.3",
   "standard_spec": "1.0",
   "healthy": true,
-  "timestamp": 1725032400
+  "timestamp": 1763038000
 }
 ```
 
@@ -537,9 +560,9 @@ Each CMS instance exposes a health and diagnostics endpoint for uptime probes, c
   "issues": [],
   "plugin": {
     "name": "WSC Search & Health",
-    "version": "1.5.0",
+    "version": "2.2.3",
     "standard_spec": "1.0",
-    "text_domain": "wsc-core",
+    "text_domain": "wsc-search-health",
     "tracking_mode": "cookieless",
     "tracking_active": true,
     "dev_mode": false
@@ -596,13 +619,13 @@ Each CMS instance exposes a health and diagnostics endpoint for uptime probes, c
 
 ---
 
-## 8. WSC Authority & Membership Endpoints (`worldsearchcouncil.org`)
+## 8. WSC Authority, Membership & MCP Endpoints (`www.worldsearchcouncil.org`)
 
 ### 8.1 License & Certification Verification
 
-Verifies active WSC memberships and certified agency tier status.
+Verifies active WSC memberships, certified agency tier status, and Tribunal sanction state.
 
-* **Endpoint**: `POST https://worldsearchcouncil.org/api/v1/license/verify`
+* **Endpoint**: `POST https://www.worldsearchcouncil.org/api/v1/license/verify` (Note: apex `https://worldsearchcouncil.org/*` permanently redirects via HTTP `308` preserving `POST` bodies)
 * **Authentication**: None (License key in payload)
 * **Content-Type**: `application/json`
 
@@ -612,9 +635,11 @@ Verifies active WSC memberships and certified agency tier status.
   "license_key": "WSC-AGENCY-9A4B-8821",
   "site_url": "https://example.com",
   "site_title": "Example Brand",
-  "wsc_version": "2.0.0",
+  "project_uuid": "proj_a1b2c3d4e5f67890",
+  "platform": "wordpress",
+  "wsc_version": "2.2.3",
   "locale": "de_DE",
-  "php_version": "8.2.14"
+  "php_version": "8.2.18"
 }
 ```
 
@@ -639,7 +664,7 @@ Verifies active WSC memberships and certified agency tier status.
 
 Provides a low-latency list of certified WSC Solution Partners for the dynamic 1-Column Bento Dashboard Card.
 
-* **Endpoint**: `GET https://worldsearchcouncil.org/api/v1/partners/featured`
+* **Endpoint**: `GET https://www.worldsearchcouncil.org/api/v1/partners/featured`
 * **Query Parameters**:
   * `locale`: Target locale string (e.g. `de_DE`, `en_US`).
   * `limit`: Number of featured partners (default: `6`).
@@ -656,7 +681,7 @@ Provides a low-latency list of certified WSC Solution Partners for the dynamic 1
       "location": "Köln, DE",
       "rating": "5.0",
       "badge": "Founding Partner",
-      "profile_url": "https://worldsearchcouncil.org/partner/search-sentinel-labs?ref=wp-dashboard"
+      "profile_url": "https://www.worldsearchcouncil.org/partner/search-sentinel-labs?ref=wp-dashboard"
     },
     {
       "name": "IndexWave Digital",
@@ -665,10 +690,22 @@ Provides a low-latency list of certified WSC Solution Partners for the dynamic 1
       "location": "Zürich, CH",
       "rating": "4.9",
       "badge": "Certified Partner",
-      "profile_url": "https://worldsearchcouncil.org/partner/indexwave-digital?ref=wp-dashboard"
+      "profile_url": "https://www.worldsearchcouncil.org/partner/indexwave-digital?ref=wp-dashboard"
     }
   ]
 }
 ```
+
+---
+
+### 8.3 Member Intelligence Model Context Protocol (`POST /api/v1/mcp`)
+
+Provides a Streamable HTTP JSON-RPC 2.0 MCP server (`2024-11-05` & `2025-03-26`) for AI coding and research clients (Claude Desktop, Cursor, Google Antigravity, Windsurf).
+
+* **Endpoint**: `POST https://www.worldsearchcouncil.org/api/v1/mcp`
+* **Authentication**: `Authorization: Bearer wsc_mcp_<personal_token>` (generated & rotatable at `https://www.worldsearchcouncil.org/member/developer`)
+* **Exposed Tools (`tools/list`, `tools/call`)**: `wsc_get_member_overview`, `wsc_list_connected_sites`, `wsc_get_site_subpages`, `wsc_scan_domain_sentinel`, `wsc_list_rfc_standards`, `wsc_read_rfc_spec`, `wsc_verify_credential`
+* **Exposed Resources (`resources/list`, `resources/read`)**: `wsc://llms.txt` and `wsc://schemas/v1/*.schema.json`
+
 
 
